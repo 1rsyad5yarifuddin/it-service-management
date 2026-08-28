@@ -1,7 +1,8 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
   provider = "prisma-client"
@@ -10,52 +11,83 @@ generator client {
 
 datasource db {
   provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
-model Role {
-  id          Int         @id @default(autoincrement())
-  name        String      @unique
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  users       User[]
+enum Role {
+  ADMIN
+  AGENT
+  USER
 }
 
-model Unit {
-  id          Int         @id @default(autoincrement())
-  name        String      @unique
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+enum TicketType {
+  INCIDENT
+  SERVICE_REQUEST
+}
 
-  users       User[]
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 model User {
-  id            Int         @id @default(autoincrement())
-  nip           String      @unique
-  namaPetugas   String
-  passwordHash  String
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
 
-  roleID        Int
-  unitID        Int
-
-  role          Role        @relation(fields: [roleID], references: [id])
-  unit          Unit        @relation(fields: [unitID], references: [id])
-  sessions      Session[]
+  ticketsCreated  Ticket[]  @relation("RequesterTickets")
+  ticketsAssigned Ticket[]  @relation("AssigneeTickets")
+  comments        Comment[]
 }
 
-model Session {
-  id                  Int         @id @default(autoincrement())
-  userID              Int
-  tokenHash           String      @unique
-  expiresAt           DateTime
-  createdAt           DateTime    @default(now())
-  lastActivityAt      DateTime    @default(now())
+model Category {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  tickets Ticket[]
+}
 
-  user                User        @relation(fields: [userID], references: [id], onDelete: Cascade)
+model Ticket {
+  id          String         @id @default(cuid())
+  title       String
+  description String         @db.Text
+  type        TicketType     @default(INCIDENT)
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
 
-  @@index([userID])
-  @@index([expiresAt])
+  categoryId  String?
+  category    Category?      @relation(fields: [categoryId], references: [id])
+
+  requesterId String
+  requester   User           @relation("RequesterTickets", fields: [requesterId], references: [id])
+
+  assigneeId  String?
+  assignee    User?          @relation("AssigneeTickets", fields: [assigneeId], references: [id])
+
+  comments    Comment[]
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  resolvedAt  DateTime?
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  message   String   @db.Text
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
 }
